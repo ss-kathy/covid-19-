@@ -1,0 +1,154 @@
+---
+title: "new cleaning"
+author: "ss5929"
+date: "7/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(zoo) # deal with missing value
+```
+
+
+```{r}
+myfiles3 = list.files(path = "data/daily422-",pattern = ".csv",full.names = F) %>% str_replace(".csv","")
+
+data3 = 
+  do.call(rbind,
+          lapply(list.files(path = "data/daily422-",pattern = ".csv",full.names = T), read.csv))
+
+rows3 = lapply(list.files(path = "data/daily422-",pattern = ".csv",full.names = T),function(x){nrow(read.csv(x))})
+
+date_check3=c(rep(myfiles3[1:length(myfiles3)],rows3[1:length(myfiles3)]))%>% as.data.frame()
+colnames(date_check3) = "date"
+
+final3 = cbind(data3,date_check3) %>% 
+  janitor::clean_names() %>% 
+  filter(country_region=="US") %>% 
+  rename("state" = "province_state") %>%
+  rename("confirm"= "confirmed") %>% 
+  select(state,date,confirm) 
+#%>% 
+#  pivot_wider(
+#    values_from = confirm,
+#    names_from = date
+#  )
+
+#%>% 
+#  filter(state=="New York") 
+
+
+final_all_states = rbind(three_days,final1,final3) %>% 
+  pivot_wider(
+    values_from = confirm,
+    names_from = date
+  ) %>% 
+  left_join(stay_home_time2 %>% select(state),.,by="state") %>% 
+  pivot_longer(
+    .,
+    cols = ends_with("-2020"),
+    names_to = "date",
+    values_to = "confirm"
+  ) %>% 
+  mutate(new = confirm - lag(confirm, default = first(confirm))) %>% 
+  filter(new>0) %>% 
+  select(date,state,new) %>% 
+  arrange(date)%>% 
+  pivot_wider(
+    values_from = new,
+    names_from = state
+  ) %>% 
+  fill(names(.)) %>% 
+  pivot_longer(
+    -date,
+    names_to = "state",
+    values_to = "new"
+  ) %>% 
+  fill(names(.))
+
+
+```
+
+# for stay home time
+```{r}
+## for all states ## data from national academy for state health policy(NASPH)
+end_date = c("04-30-2020","04-21-2020","05-15-2020","No","07-17-2020","04-26-2020","03-20-2020","03-31-2020","05-15-2020","04-30-2020","04-30-2020","05-31-2020","04-30-2020","05-31-2020","05-01-2020","No","05-03-2020","07-17-2020","05-15-2020","05-31-2020","06-19-2020","05-18-2020","05-28-2020","05-17-2020","05-11-2020","05-03-2020","04-26-2020","No","05-09-2020","06-15-2020","06-09-2020","05-31-2020","05-28-2020","05-22-2020","No","05-29-2020","05-06-2020","07-17-2020","06-04-2020","05-28-2020","05-04-2020","No","04-30-2020","04-30-2020","05-01-2020","05-15-2020","06-10-2020","05-31-2020","05-04-2020","05-13-2020","No")
+
+stay_home_time2 = read.csv("data/stay_home_time.csv") %>% 
+  rename("start_date" = "time") %>% 
+  cbind(.,end_date) %>% 
+  filter(state!="Kentucky" & state!="Massachusetts" & state!="Oklahoma") %>% 
+  filter(start_date!="No"& start_date!="Regional") %>% 
+  mutate(
+     start_date = paste0("2020-",start_date),
+     start_date = as.Date(as.character(start_date),format = "%Y-%d-%b"),
+     end_date = as.Date(as.character(end_date),format = "%m-%d-%Y")
+  )
+
+```
+
+#combine two datasets
+```{r}
+
+US_all1 = left_join(final_all_states,stay_home_time2,by="state") %>% 
+  na.omit() %>% 
+  mutate(
+    date = as.Date(as.character(date),format = "%m-%d-%Y"),
+    policy = ifelse((date<=end_date & date>=start_date),1,0)
+  ) %>%  select(date,state,new,policy)
+
+#US_all1$policy = ifelse(US_all1$date<=US_all1$end_date & US_all1$date>=US_all1$start_date,1,0)
+
+control_state = read.csv("data/stay_home_time.csv") %>% 
+  rename("start_date" = "time") %>% 
+  cbind(.,end_date) %>% 
+  filter(start_date =="No" | start_date =="Regional") %>% 
+  left_join(final_all_states,.,by="state") %>% 
+  na.omit() %>% 
+  mutate(
+    date = as.Date(as.character(date),format = "%m-%d-%Y"),
+    policy = 0
+  ) %>% select(date,state,new,policy)
+
+US_all = rbind(US_all1,control_state)
+
+write.csv(US_all, file="US_all.csv")
+
+```
+
+
+
+
+# only for ny
+```{r}
+### only for new york
+#final_ny = final_confirm %>% 
+#  filter(state == "New York") %>% 
+#  rbind(.,final3) %>% 
+#  mutate(new = confirm - lag(confirm, default = first(confirm))) %>% 
+#  select(date,new) %>% 
+#  filter(new>0)
+#
+## 322-613 stay at home order for new york
+#order = c(rep(0,3),rep(1,84),rep(0,34))
+#ny = cbind(final_ny,order)
+
+```
+
+
+```{r}
+#library(did)
+#data("mpdta")
+#out <- mp.spatt(lemp ~ treat, xformla=~lpop, data=mpdta,
+#                 panel=TRUE, first.treat.name="first.treat",
+#                 idname="countyreal", tname="year",
+#                 bstrap=FALSE, se=TRUE, cband=FALSE)
+#summary(out)
+#
+#
+#library(gridExtra)
+#ggdid(out, ylim=c(-.25,.1))
+```
+
+

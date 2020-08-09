@@ -1,0 +1,77 @@
+---
+title: "casual effect"
+author: "ss5929"
+date: "7/22/2020"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(PanelMatch)
+
+```
+
+
+```{r}
+us_all  = read.csv("US_all.csv") %>% 
+  mutate(state = as.numeric(state),
+         days = as.Date(as.character(date))-as.Date(as.character("2020-3-19")),
+         days = as.integer(days)
+         )  # %>%select(state,days,new) %>% pivot_wider(values_from = new,names_from = days)
+  
+
+
+DisplayTreatment(unit.id = "state",
+                 time.id = "days", legend.position = "none",
+                 xlab = "datys", ylab = "state",
+                 treatment = "policy", data = us_all)
+
+PM.results.none <- PanelMatch(lag = 7, time.id = "days", unit.id = "state", 
+                         treatment = "policy", refinement.method = "none", 
+                         data = us_all, match.missing = TRUE, 
+                         size.match = 5, qoi = "att", outcome.var = "new",
+                         lead = 0:4, forbid.treatment.reversal = FALSE, 
+                         use.diagonal.variance.matrix = TRUE)
+msets <- PM.results.none$att
+plot(PM.results.none$att)
+```
+
+#changepoint analysis
+```{r}
+
+b = us_all %>% filter(state==1) 
+a = cpt.mean(b$policy)
+plot(a,cpt.col="blue")
+
+```
+
+
+# evaluating
+```{r}
+mset <- PM.results.none$att[1]
+
+DisplayTreatment(unit.id = "state",
+                 time.id = "days", legend.position = "none",
+                 xlab = "days", ylab = "state",
+                 treatment = "policy", data = us_all,
+                 matched.set = mset, # this way we highlight the particular set
+                 show.set.only = TRUE)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
